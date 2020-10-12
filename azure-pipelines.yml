@@ -1,25 +1,39 @@
-1 pool: 
-2   vmImage: 'ubuntu-16.04' 
-3 trigger: 
-4   - master 
-5 steps: 
-6   - task: CopyFiles@2 
-7     displayName: 'Copy Files to: $(build.artifactstagingdirectory)/Templates' 
-8     inputs: 
-9       SourceFolder: deployment 
-10       Contents: '*.json' 
-11       TargetFolder: '$(build.artifactstagingdirectory)/Templates' 
-12   - task: Npm@1 
-13     displayName: 'npm custom' 
-14     inputs: 
-15       command: custom 
-16       verbose: false 
-17       customCommand: 'install --production' 
-18   - task: ArchiveFiles@2 
-19     displayName: 'Archive $(Build.SourcesDirectory)' 
-20     inputs: 
-21       rootFolderOrFile: '$(Build.SourcesDirectory)' 
-22       includeRootFolder: false 
-23   - task: PublishBuildArtifacts@1 
-24     displayName: 'Publish Artifact: drop' 
-
+pool:
+  vmImage: ubuntu-16.04
+trigger:
+  - master    ## CI Triggers 를 통해 실행 => Master branch에 업데이트가 trigger로 동작
+steps:
+  - task: Npm@1
+    inputs:
+      command: 'custom'
+      customcommand: 'install --production'
+  - script: |
+      npm install
+      npm test
+    displayName: 'Run unit tests'
+    continueOnError: true
+  - task: PublishTestResults@2
+    displayName: 'Publish Test Results'
+    condition: succeededOrFailed()
+    inputs:
+      testResultsFiles: $(System.DefaultWorkingDirectory)/test-report.xml
+  - task: PublishCodeCoverageResults@1
+    displayName: 'Publish Code Coverage'
+    condition: 'in(variables[''Agent.JobStatus''], ''Succeeded'')'
+    inputs:
+      codeCoverageTool: Cobertura
+      summaryFileLocation: '$(System.DefaultWorkingDirectory)/coverage/*coverage.xml'
+      reportDirectory: $(System.DefaultWorkingDirectory)/coverage
+  - task: ArchiveFiles@2
+    displayName: 'Archive sources'
+    inputs:
+      rootFolderOrFile: $(Build.SourcesDirectory)
+      includeRootFolder: false
+  - task: CopyFiles@2
+    displayName: 'Copy ARM templates'
+    inputs:
+      SourceFolder: deployment
+      Contents: '*.json'
+      TargetFolder: $(build.artifactstagingdirectory)/Templates
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish Artifact: drop'
